@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DECA Judge AI — V4.4 (Animated • Scroll‑inside panel • Wider chat)</title>
+<meta name="description" content="DECA practice simulator with Google-like suggestions, deep scenarios shown in chat, 1-by-1 questions, overall score in chat, and per-question + rubric grading on the side. Animated UI; scroll inside the panel." />
+<style>
+:root{ --bg:#0b1020; --panel:#0f1630; --accent:#1e90ff; --accent2:#60a5fa; --text:#e6eefc; --muted:#9fb0d9; --good:#34d399; --warn:#fbbf24; --bad:#f87171; --chip:#1b2547; }
+*{box-sizing:border-box}
+html,body{max-width:100%; overflow-x:hidden;}
+body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; color:var(--text);
+background: radial-gradient(1200px 800px at 80% -10%, rgba(30,144,255,.12), transparent 60%), radial-gradient(900px 600px at -10% 110%, rgba(96,165,250,.10), transparent 60%), var(--bg);}
+.header{position:sticky; top:0; z-index:5; background:linear-gradient(180deg, rgba(11,16,32,.95), rgba(11,16,32,.75)); backdrop-filter: blur(8px);}
+.header-inner{max-width:1200px; margin:0 auto; padding:12px 16px; display:flex; gap:12px; align-items:center}
+.logo{width:36px; height:36px; border-radius:12px; box-shadow:0 0 0 1px rgba(96,165,250,.25), 0 8px 24px rgba(30,144,255,.25); background: conic-gradient(from var(--rot), rgba(30,144,255,.9), rgba(96,165,250,.7), rgba(30,144,255,.9)); position:relative; animation:spin 6s linear infinite}
+.logo::after{content:'D'; position:absolute; inset:2px; background:#0e1531; color:var(--accent2); display:grid; place-items:center; border-radius:10px; font-weight:800}
+@keyframes spin{to{--rot:360deg}}
+.title{font-weight:800}
+/* Two columns: Left (Setup+Scores) and Middle (Chat). Right column removed for more space */
+.wrap{max-width:1200px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns: 360px 1fr; overflow:visible}
+@media(max-width:1100px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--panel); border:1px solid rgba(96,165,250,.15); border-radius:16px; box-shadow:0 10px 24px rgba(0,0,0,.25); position:relative; overflow:visible}
+.card .body{padding:14px; overflow:visible}
+h3{margin:0 0 8px}
+.input, textarea, select{width:100%; background:#0c132a; border:1px solid rgba(96,165,250,.25); color:var(--text); border-radius:12px; padding:10px 12px; font:inherit; outline:none; transition:.25s border-color ease, .25s box-shadow ease}
+.input:focus, textarea:focus{box-shadow:0 0 0 3px rgba(96,165,250,.25); border-color:rgba(96,165,250,.55)}
+textarea{min-height:120px; resize:vertical; overflow:auto}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.badge{display:inline-block; padding:4px 8px; border-radius:999px; background:#152048; border:1px solid rgba(96,165,250,.25); color:#cfe1ff; font-size:12px}
+.slab{background:#0c132a; border:1px solid rgba(96,165,250,.25); border-radius:12px; padding:12px}
+/* Chat area: scroll INSIDE the card; composer always visible at bottom */
+.mid .body{display:flex; flex-direction:column; height:calc(100vh - 170px); padding-bottom:0}
+.chat{flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; padding:8px 8px 12px; overflow-wrap:anywhere}
+.msg{display:flex}
+.bubble{max-width:85%; padding:12px 14px; border-radius:14px; line-height:1.5; border:1px solid rgba(96,165,250,.15); overflow-wrap:anywhere; word-break:break-word; animation:bubbleIn .25s ease}
+.you .bubble{margin-left:auto; background:#111a39}
+.ai .bubble{background:#0b1330}
+@keyframes bubbleIn{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+.dim{color:var(--muted)}
+.kpiRow{display:grid; grid-template-columns:1fr 64px; gap:8px; align-items:center}
+.kpiRow .bar{height:9px; background:#0e1735; border:1px solid rgba(96,165,250,.18); border-radius:999px; overflow:hidden}
+.kpiRow .bar>i{display:block; height:100%; background:linear-gradient(90deg, #22d3ee, #3b82f6)}
+hr.sep{border:none; height:1px; background:linear-gradient(90deg, transparent, rgba(96,165,250,.35), transparent); margin:12px 0}
+
+/* ChatGPT-like composer: buttons inside the box */
+.composer{position:relative; background:linear-gradient(180deg, rgba(11,16,32,.0), rgba(11,16,32,.65)); border-top:1px solid rgba(96,165,250,.2); padding:10px; display:flex; gap:8px; align-items:flex-end; backdrop-filter: blur(3px); z-index:2}
+.compose-inner{position:relative; flex:1}
+.composer textarea{flex:1; max-height:220px; padding-right:140px;} /* reserve space for buttons */
+.compose-actions{position:absolute; right:8px; bottom:8px; display:flex; gap:8px}
+
+/* Buttons: animated glow + ripple */
+.btn{appearance:none; border:none; border-radius:10px; cursor:pointer; padding:10px 14px; font-weight:700; color:white; background:linear-gradient(180deg, var(--accent), #2563eb); box-shadow:0 10px 24px rgba(37,99,235,.35); transition:transform .08s ease, box-shadow .25s ease; position:relative; overflow:hidden}
+.btn:hover{transform:translateY(-1px); box-shadow:0 14px 30px rgba(37,99,235,.45)}
+.btn:active{transform:translateY(0);}
+.btn.secondary{background:#111a39; color:#dbe8ff; border:1px solid rgba(96,165,250,.28); box-shadow:none}
+.btn .ripple{position:absolute; border-radius:999px; transform:scale(0); animation:ripple .5s ease-out; background:rgba(255,255,255,.35); pointer-events:none}
+@keyframes ripple{to{transform:scale(18); opacity:0}}
+
+/* Typeahead open animation */
+#eventSuggest{transform-origin:top; opacity:0; transform:scaleY(.98); transition:.15s ease opacity, .15s ease transform}
+#eventSuggest.open{opacity:1; transform:scaleY(1)}
+.scoreHeader{font-size:14px; font-weight:800; margin:8px 0 4px}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-inner">
+    <div class="logo"></div>
+    <div>
+      <div class="title">DECA Judge AI — V4.4</div>
+      <div class="dim">Animations • Scroll inside Practice Panel • Wider chat composer • Scores moved to the left.</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- LEFT: Setup + Scores -->
+  <section class="card left">
+    <div class="body">
+      <h3>Setup</h3>
+      <div class="row">
+        <div class="typeahead" style="flex:1; position:relative; z-index:10">
+          <input id="eventInput" class="input" placeholder="Type any DECA event (e.g., Principles of Finance)" autofocus />
+          <div id="eventSuggest" class="slab" role="listbox" aria-label="Event suggestions" style="position:absolute; left:0; right:0; top:calc(100% + 6px); display:none; max-height:300px; overflow:auto"></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="grade" class="dim" style="min-width:70px">Grade</label>
+        <select id="grade" class="input" style="max-width:160px">
+          <option value="9">9</option>
+          <option value="10" selected>10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+        </select>
+        <button id="genBtn" class="btn">Generate Scenario</button>
+      </div>
+
+      <div class="quick" id="quickEvents" style="margin-top:6px"></div>
+
+      <hr class="sep">
+      <div class="row">
+        <button id="judgeBtn" class="btn">Finish & Get Scores</button>
+        <button id="exportBtn" class="btn secondary" title="Download score history">Export History</button>
+        <button id="resetHistoryBtn" class="btn secondary">Reset History</button>
+      </div>
+
+      <hr class="sep">
+      <h3>Score Details</h3>
+      <div id="sideScores" class="slab">
+        <div class="dim">After you press <b>Finish & Get Scores</b>, per‑question and rubric breakdown will appear here.</div>
+      </div>
+
+      <h3 style="margin-top:14px">Score History</h3>
+      <div id="history" class="chat" style="max-height:240px"></div>
+    </div>
+  </section>
+
+  <!-- MIDDLE: Practice Panel -->
+  <section class="card mid">
+    <div class="body">
+      <h3>Practice Panel</h3>
+      <div id="chat" class="chat"></div>
+      <div class="composer">
+        <div class="compose-inner">
+          <textarea id="compose" class="input" placeholder="Type your presentation or answer… (the box expands as you type)"></textarea>
+          <div class="compose-actions">
+            <button id="sendBtn" class="btn">Send</button>
+            <button id="nextQBtn" class="btn secondary" title="Submit current answer & show the next question" disabled>Next Q</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: intentionally empty for more space -->
+</main>
+<div class="footer" style="text-align:center; color:var(--muted); padding:10px">Single file, classroom-ready. Works offline. Deploy on Netlify / GitHub Pages / Vercel.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function escapeHtml(str=''){ return str.replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[ch])); }
+function escAttr(s=''){ return String(s).split('"').join('&quot;'); }
+function addMsg(role, html){const wrap=document.createElement('div'); wrap.className='msg '+(role==='you'?'you':'ai'); const b=document.createElement('div'); b.className='bubble'; b.innerHTML=html; wrap.appendChild(b); $('chat').appendChild(wrap); $('chat').scrollTop=$('chat').scrollHeight;}
+
+// Button ripple animation
+function addRipple(btn){
+  btn.addEventListener('click', (e)=>{
+    const r = document.createElement('span');
+    const size = Math.max(btn.offsetWidth, btn.offsetHeight);
+    r.className='ripple'; r.style.width=r.style.height=size+'px';
+    const rect = btn.getBoundingClientRect();
+    r.style.left = (e.clientX - rect.left - size/2) + 'px';
+    r.style.top  = (e.clientY - rect.top  - size/2) + 'px';
+    btn.appendChild(r);
+    setTimeout(()=>r.remove(), 500);
+  });
+}
+document.addEventListener('DOMContentLoaded', ()=>{ document.querySelectorAll('.btn').forEach(addRipple); });
+
+// OFFICIAL EVENTS + TYPEAHEAD
+const OFFICIAL_EVENTS = [
+  "Principles of Business Management & Administration","Principles of Finance","Principles of Hospitality & Tourism","Principles of Marketing",
+  "Accounting Applications","Apparel & Accessories Marketing","Automotive Services Marketing","Business Finance","Business Services Marketing","Entrepreneurship Series","Food Marketing","Hotel & Lodging Management","Human Resources Management","Marketing Communications","Personal Financial Literacy","Quick Serve Restaurant Management","Restaurant & Food Service Management","Retail Merchandising","Sports & Entertainment Marketing",
+  "Business Law & Ethics Team Decision Making","Buying & Merchandising Team Decision Making","Entrepreneurship Team Decision Making","Financial Services Team Decision Making","Hospitality Services Team Decision Making","Marketing Management Team Decision Making","Sports & Entertainment Marketing Team Decision Making","Travel & Tourism Team Decision Making",
+  "Business Services Operations Research","Finance Operations Research","Hospitality & Tourism Operations Research","Sports & Entertainment Marketing Operations Research",
+  "Innovation Plan","Start-Up Business Plan","Independent Business Plan","International Business Plan","Business Growth Plan","Franchise Business Plan",
+  "Community Giving Project","Career Development Project","Sales Project","Integrated Marketing Campaign - Event","Integrated Marketing Campaign - Product","Integrated Marketing Campaign - Service"
+];
+
+function hideSuggest(){ const box=$('eventSuggest'); box.style.display='none'; box.classList.remove('open'); box.innerHTML=''; }
+function buildSuggestions(query){
+  const box = $('eventSuggest');
+  const q = (query||'').trim().toLowerCase();
+  if(!q){ hideSuggest(); return; }
+  const matches = OFFICIAL_EVENTS.filter(e=>e.toLowerCase().includes(q)).slice(0,8);
+  const list = [{label:`Use event: \"${query}\"`, value:query, hint:'press Enter'}, ...matches.map(m=>({label:m, value:m}))];
+  box.innerHTML = list.map((opt,i)=>`<div class="opt${i===0?' active':''}" role="option" data-val="${escAttr(opt.value)}" style="display:flex; justify-content:space-between; padding:10px 12px; cursor:pointer"><span>${opt.label}</span>${opt.hint?`<span class='dim'>${opt.hint}</span>`:''}</div>`).join('');
+  box.style.display='block'; box.classList.add('open');
+}
+function chooseSuggestion(val){ $('eventInput').value = val; hideSuggest(); }
+(function wireTypeahead(){
+  const input = $('eventInput'); const box = $('eventSuggest');
+  input.addEventListener('input', (e)=>buildSuggestions(e.target.value));
+  input.addEventListener('focus', (e)=>{ if(e.target.value.trim()) buildSuggestions(e.target.value); });
+  input.addEventListener('keydown', (e)=>{
+    if(box.style.display==='none') return;
+    const opts = Array.from(box.querySelectorAll('.opt'));
+    const idx = opts.findIndex(o=>o.classList.contains('active'));
+    if(e.key==='ArrowDown'){ e.preventDefault(); const ni=Math.min(opts.length-1, idx+1); opts.forEach(o=>o.classList.remove('active')); opts[ni]?.classList.add('active'); opts[ni]?.scrollIntoView({block:'nearest'}); }
+    if(e.key==='ArrowUp'){ e.preventDefault(); const ni=Math.max(0, idx-1); opts.forEach(o=>o.classList.remove('active')); opts[ni]?.classList.add('active'); opts[ni]?.scrollIntoView({block:'nearest'}); }
+    if(e.key==='Enter'){ const active = opts[idx>=0?idx:0]; if(active){ e.preventDefault(); chooseSuggestion(active.getAttribute('data-val')); } }
+    if(e.key==='Escape'){ hideSuggest(); }
+  });
+  box.addEventListener('mousedown', (e)=>{ const opt = e.target.closest('.opt'); if(!opt) return; chooseSuggestion(opt.getAttribute('data-val')); });
+  document.addEventListener('click', (e)=>{ if(!box.contains(e.target) && e.target!==input){ hideSuggest(); } });
+})();
+
+// Quick picks
+(function renderQuick(){ const root=$('quickEvents'); const picks=["Principles of Finance","Principles of Marketing","Business Law & Ethics Team Decision Making","Hospitality & Tourism Operations Research","Start-Up Business Plan","Sports & Entertainment Marketing"]; picks.forEach(p=>{ const span=document.createElement('span'); span.className='badge'; span.textContent=p; span.style.cursor='pointer'; span.addEventListener('click',()=>{ $('eventInput').value=p; buildSuggestions(p); }); root.appendChild(span); }); })();
+
+// Scenario + QA (same rubric library)
+const EVENT_LIBRARY=[
+ {names:["Principles of Finance","Finance"],kpis:[
+  {name:"Financial Analysis",keywords:["interest","rate","ROI","loan","savings","credit","budget","risk","breakeven","forecast","margin"]},
+  {name:"Customer Needs",keywords:["segment","youth","student","needs","barrier","engagement","adoption"]},
+  {name:"Solution Design",keywords:["product","package","tiered","program","incentive","feature","onboarding"]},
+  {name:"Communication",keywords:["present","summary","clear","metric","measure","goal","visual"]},
+  {name:"Ethics & Compliance",keywords:["ethical","privacy","responsible","regulation","policy","disclosure"]}
+ ], questionBank:[
+  "How will you measure success in the first 3–6 months?",
+  "Higher interest reduces margins—how do you keep the program profitable?",
+  "What retention tactics do you use if the client doesn’t engage at first?",
+  "How do incentives stay ethical and avoid encouraging overspending?"
+ ]},
+ {names:["Business Law & Ethics","Law"],kpis:[
+  {name:"Problem Solving",keywords:["statute","policy","precedent","risk","remedy","compliance","liability"]},
+  {name:"Ethics",keywords:["integrity","fairness","confidential","disclosure","stakeholder","consent"]},
+  {name:"Communication",keywords:["explain","justify","policy","procedure","report","training"]},
+  {name:"Strategy",keywords:["timeline","monitor","audit","governance","escalation"]}
+ ], questionBank:[
+  "Which policies would you implement immediately and why?",
+  "How will you monitor compliance across departments?",
+  "What risks could arise and how will you mitigate them?"
+ ]},
+ {names:["Principles of Marketing","Marketing","POM"],kpis:[
+  {name:"Strategy",keywords:["objective","SMART","position","value","timeline","budget","funnel"]},
+  {name:"Segmentation",keywords:["segment","demographic","psychographic","persona","target"]},
+  {name:"Communication",keywords:["message","CTA","story","brand","channel","touchpoint"]},
+  {name:"Innovation",keywords:["pilot","MVP","A/B","experiment","iteration"]},
+  {name:"Ethics",keywords:["privacy","consent","bias","sustainability","transparency"]}
+ ], questionBank:[
+  "Which two channels will you prioritize and why?",
+  "How will you test and iterate in month one?",
+  "What metrics prove this is working?"
+ ]}
+];
+
+function findEventConfig(name){
+  const n=(name||'').trim().toLowerCase();
+  for(const cfg of EVENT_LIBRARY){
+    if(cfg.names.some(x=>x.toLowerCase()===n)) return cfg;
+    if(cfg.names.some(x=>n.includes(x.toLowerCase()))) return cfg;
+  } return null;
+}
+
+function deepScenario(eventName, grade){
+  const cfg=findEventConfig(eventName);
+  const levelTxt = grade<=10 ? "introductory" : grade==11 ? "intermediate" : "advanced";
+  let background, data, stakeholders, constraints, risks, yourRole, judgeRole;
+  if(cfg && cfg.names.includes("Principles of Finance")){
+    background = "GreenTree Credit Union’s youth (18–25) membership dropped 12% YoY. App activation is 42%, average monthly balance is $186. Only 18% use budgeting tools.";
+    data = "Branch A: dense student area; Branch B: suburban families. CAC target <$25; delinquency <1.2%; churn <3%/mo.";
+    stakeholders = "CEO, Branch Managers, Compliance, Community Outreach (schools).";
+    constraints = "No new headcount; marketing pilot budget $2,500 for 60 days; must comply with CIP, privacy, and disclosure policies.";
+    risks = "Incentive abuse, low adoption, margin erosion from teaser rates, data privacy complaints.";
+    yourRole = "Junior Financial Advisor proposing a sustainable, ethical youth program.";
+    judgeRole = "Credit Union Manager evaluating feasibility, profitability, and compliance.";
+  } else if(cfg && cfg.names.includes("Business Law & Ethics")){
+    background = "Regional retailer posted a customer photo without consent. Complaint trending on social. Two states with different privacy statutes; 3 prior minor incidents internal.";
+    data = "Web traffic up 30% from controversy; sales flat; retention at risk. HR training completion 64% last quarter.";
+    stakeholders = "Marketing, Legal, HR, Store Managers, Affected customer(s).";
+    constraints = "Public response within 24 hours; full remediation plan in 7 days; audit policy in 30 days.";
+    risks = "Legal liability for publicity rights, reputational damage, repeat incidents from unclear processes.";
+    yourRole = "Compliance Associate recommending immediate remedy + durable policy changes.";
+    judgeRole = "Operations Director assessing compliance, ethics, and rollout viability.";
+  } else {
+    background = `A ${eventName} organization faces rising competition and flat growth.`;
+    data = "Budget limited; need measurable results in 60–90 days.";
+    stakeholders = "Leadership, Operations, Customers.";
+    constraints = "No additional hires; pilot budget capped; report weekly metrics.";
+    risks = "Execution risk, poor adoption, unclear ownership.";
+    yourRole = "Student Consultant proposing a practical, ethical plan.";
+    judgeRole = "Client Manager deciding whether to adopt your plan.";
+  }
+  const kpis = (cfg? cfg.kpis.map(k=>k.name): ["Strategy","Problem Solving","Communication","Ethics"]);
+
+  const rubric = [
+    {name:kpis[0]||"Strategy", weight:30, looks:["clear SMART goal(s)","timeline & owners","resource/budget fit"]},
+    {name:kpis[1]||"Analysis", weight:20, looks:["relevant data/segments","root cause reasoning","trade-offs considered"]},
+    {name:kpis[2]||"Communication", weight:20, looks:["organized structure","concise language","quantified metrics"]},
+    {name:kpis[3]||"Ethics/Compliance", weight:15, looks:["privacy/consent","fairness/transparency","risk controls"]},
+    {name:"Execution Details", weight:15, looks:["step-by-step plan","KPIs & thresholds","contingency/pivot"]},
+  ];
+
+  const instructions = [
+    `Present a ${levelTxt} plan (1–3 min): Intro → Analysis → Strategy → Implementation → Metrics → Ethics.`,
+    "Then answer 2–5 follow‑up questions one by one in the chat.",
+    "A perfect “100/100” example will be shown after scoring—use it as a model answer."
+  ];
+
+  return {background,data,stakeholders,constraints,risks,yourRole,judgeRole,kpis,rubric,instructions,cfg};
+}
+
+function scenarioHTMLChat(s){
+  return `<div class="slab">
+    <div class="badge">Background</div> ${escapeHtml(s.background)}<br><br>
+    <div class="badge">Data</div> ${escapeHtml(s.data)}<br><br>
+    <div class="badge">Stakeholders</div> ${escapeHtml(s.stakeholders)}<br><br>
+    <div class="badge">Constraints</div> ${escapeHtml(s.constraints)}<br><br>
+    <div class="badge">Risks</div> ${escapeHtml(s.risks)}<br><br>
+    <div class="badge">Your Role</div> ${escapeHtml(s.yourRole)}<br>
+    <div class="badge" style="margin-top:8px">Judge looks for</div>
+    ${s.rubric.map(r=>`<div class="slab" style="margin:6px 0"><b>${escapeHtml(r.name)} (${r.weight}%)</b><br><span class="dim">Looks for:</span> ${r.looks.map(x=>`<span class="badge">${escapeHtml(x)}</span>`).join(' ')}</div>`).join('')}
+  </div>
+  <div class="dim" style="margin-top:6px">Instructions: ${s.instructions.join(" ")}<br>Official PIs: ${s.kpis.map(k=>`<span class="badge">${escapeHtml(k)}</span>`).join(' ')}</div>`;
+}
+
+// Flow state
+const state={ phase:'initial', eventName:null, grade:10, scenario:null, qaList:[], qaIdx:0, qaAnswers:[], initialText:"" };
+
+function pickQuestions(cfg){
+  const bank = (cfg && cfg.questionBank) || [
+    "What metric best proves this is working in month one?",
+    "What is the biggest risk and how will you mitigate it?",
+    "If results lag, what is your first pivot?"
+  ];
+  const copy=[...bank]; const out=[]; const n=Math.min(5, Math.max(2, Math.floor(Math.random()*4)+2));
+  for(let i=0;i<n && copy.length;i++){ const k = Math.floor(Math.random()*copy.length); out.push(copy.splice(k,1)[0]); }
+  return out;
+}
+
+// Composer auto-grow
+(function autoGrow(){
+  const t=$('compose');
+  function grow(){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight, 220)+'px'; }
+  t.addEventListener('input', grow); grow();
+})();
+
+$('genBtn').addEventListener('click', ()=>{
+  state.eventName = $('eventInput').value.trim() || 'General Event';
+  state.grade = Number($('grade').value);
+  state.scenario = deepScenario(state.eventName, state.grade);
+  state.qaList = pickQuestions(state.scenario.cfg);
+  state.qaIdx = 0; state.qaAnswers = []; state.initialText=''; state.phase='initial';
+  $('chat').innerHTML='';
+  addMsg('ai', `<b>Scenario for</b> <i>${escapeHtml(state.eventName)}</i>`);
+  addMsg('ai', scenarioHTMLChat(state.scenario));
+  addMsg('ai', `When you're done writing your presentation, press <b>Send</b>.`);
+  $('compose').placeholder = "Type your initial presentation here (1–3 min)...";
+  $('nextQBtn').disabled = true;
+  $('compose').focus();
+});
+
+$('sendBtn').addEventListener('click', ()=>{
+  const text=$('compose').value.trim();
+  if(!text){ $('compose').focus(); return; }
+  if(!state.scenario){ alert('Generate a scenario first.'); $('eventInput').focus(); return; }
+  if(state.phase==='initial'){
+    state.initialText=text;
+    addMsg('you', escapeHtml(text));
+    $('compose').value=''; $('compose').dispatchEvent(new Event('input'));
+    state.phase='qa';
+    $('compose').placeholder = "Answer this follow‑up question...";
+    $('nextQBtn').disabled=false;
+    showQuestion();
+  } else if(state.phase==='qa'){
+    addMsg('ai','<span class="dim">Use <b>Next Q</b> to submit this answer and move on.</span>');
+  }
+});
+
+function showQuestion(){
+  const total=state.qaList.length, i=state.qaIdx;
+  if(i>=total){
+    addMsg('ai','Follow‑up complete. Click <b>Finish & Get Scores</b> for feedback.');
+    $('compose').placeholder="You can add any final notes, or press Finish & Get Scores.";
+    $('nextQBtn').disabled=true;
+    return;
+  }
+  addMsg('ai', `<b>Question ${i+1}/${total}:</b> ${escapeHtml(state.qaList[i])}`);
+  $('compose').value=''; $('compose').dispatchEvent(new Event('input'));
+  $('compose').focus();
+}
+
+$('nextQBtn').addEventListener('click', ()=>{
+  if(state.phase!=='qa'){ return; }
+  const ans = $('compose').value.trim();
+  if(!ans){ alert('Please type your answer.'); $('compose').focus(); return; }
+  state.qaAnswers.push({q: state.qaList[state.qaIdx], a: ans});
+  addMsg('you', `<b>A:</b> ${escapeHtml(ans)}`);
+  state.qaIdx++; showQuestion();
+});
+
+// Scoring
+function judgeText(eventName, initialText, qaAnswers, rubric){
+  const cfg=findEventConfig(eventName);
+  const kpis = cfg ? cfg.kpis : [
+    {name:"Strategy",keywords:["goal","timeline","budget","channel","milestone"]},
+    {name:"Problem Solving",keywords:["issue","root","risk","option","trade-off"]},
+    {name:"Communication",keywords:["introduction","summary","recommend","conclusion","metric"]},
+    {name:"Ethics",keywords:["privacy","responsible","policy","consent"]}
+  ];
+  const full = (initialText + " " + qaAnswers.map(x=>x.a).join(" ")).toLowerCase();
+  const words = full.split(/\s+/).filter(Boolean).length;
+  const hasSections = /(introduction|analysis|strategy|implementation|financial|ethic|conclusion|metric)/i.test(initialText);
+  const details=[]; let weightedTotal=0; let totalWeight=0;
+  for(const r of rubric){
+    let baseScore=0;
+    const k = kpis.find(k=>k.name.toLowerCase().includes(r.name.toLowerCase().split('/')[0]));
+    if(k){
+      let hits=0; for(const kw of k.keywords){ const re=new RegExp("\\b"+kw.replace(/[-/\\^$*+?.()|[\\]{}]/g,"\\$&")+"\\b","i"); if(re.test(full)) hits++; }
+      baseScore = Math.round((hits/Math.max(1,k.keywords.length))*90);
+    } else {
+      const signals = ["owner","timeline","milestone","kpi","metric","threshold","risk","contingency","pilot"];
+      let hits=0; for(const s of signals){ const re=new RegExp("\\b"+s+"\\b","i"); if(re.test(full)) hits++; }
+      baseScore = Math.round((hits/Math.max(1,signals.length))*90);
+    }
+    if(hasSections) baseScore+=3;
+    if(words>350) baseScore+=4;
+    baseScore=Math.min(100,baseScore);
+    details.push({name:r.name, score:baseScore, weight:r.weight, tip:"Looks for: "+r.looks.join(", ")});
+    weightedTotal += baseScore * r.weight; totalWeight += r.weight;
+  }
+  const overall = Math.round(weightedTotal/totalWeight);
+
+  // Per-question score: length + keyword presence from any KPI
+  const qaScores = qaAnswers.map(({q,a},idx)=>{
+    const t=a.toLowerCase();
+    const len = t.split(/\s+/).filter(Boolean).length;
+    const keyset = kpis.flatMap(k=>k.keywords.slice(0,4)); // sample keywords
+    let hits=0; for(const kw of keyset){ const re=new RegExp("\\b"+kw.replace(/[-/\\^$*+?.()|[\\]{}]/g,"\\$&")+"\\b","i"); if(re.test(t)) hits++; }
+    let s = Math.min(100, Math.round((hits/Math.max(1,keyset.length))*80 + Math.min(20, Math.floor(len/40)*5)));
+    return {idx: idx+1, score:s, len, hits};
+  });
+
+  return {overall, details, words, hasSections, kpiNames:kpis.map(k=>k.name), qaScores};
+}
+
+function perfectExample(eventName){
+  const cfg=findEventConfig(eventName);
+  if(cfg && cfg.names.includes("Principles of Finance")){
+    return `<div class="slab">
+      <div><b>🏦 INITIAL PRESENTATION (2–3 minutes)</b></div>
+      <p>“Good morning, thank you for meeting with me today. After analyzing GreenTree Credit Union’s membership data, it’s clear that the 18–25 age group is an under‑served segment. To attract and retain these young adults while maintaining profitability, I’ve developed a three‑part strategy focused on <b>education</b>, <b>accessibility</b>, and <b>engagement</b>.”</p>
+      <ol>
+        <li><b>Financial Education Partnerships</b><br>
+          We’ll partner with high schools, colleges, and universities to host short workshops/webinars on budgeting, credit, and saving for major purchases. Students register with school IDs, letting us attribute results by campus. <i>Metrics:</i> attendees → new accounts → ongoing app engagement.
+        </li>
+        <li style="margin-top:6px"><b>Tailored Youth Banking Products (“SmartStart”)</b><br>
+          Features: no minimum balance; free goal‑tracker in the mobile app; <b>tiered interest</b> that increases with consistent deposits. While teaser rates reduce short‑term margin, they build <i>lifetime value</i> as members later seek auto loans, credit cards, and mortgages.
+        </li>
+        <li style="margin-top:6px"><b>Engagement & Incentive Program (“Save & Earn”)</b><br>
+          Deposit $50/month for three consecutive months → earn a modest $10 reward or gift‑card points. This keeps incentives sustainable while reinforcing positive behavior.
+        </li>
+      </ol>
+      <p>Overall, this strategy builds trust, encourages responsible habits, and positions GreenTree as community‑focused and future‑oriented. By balancing education, customized products, and ethical incentives, we’ll create lifelong relationships while supporting financial goals.”</p>
+
+      <div style="margin-top:10px"><b>🧑‍⚖️ FOLLOW‑UP QUESTION RESPONSES</b></div>
+      <p><b>Q1:</b> How would you measure success of the education program?<br>
+      <b>A:</b> Track attendees → new accounts per school → app engagement. Target a 10–15% increase in student memberships in six months.</p>
+      <p><b>Q2:</b> Higher interest hurts profits. How do you prevent that?<br>
+      <b>A:</b> Use <i>tiered</i> rates earned only by consistent savers; cap total reward budget; monitor margin and LTV. Loyal savers convert to profitable lending later.</p>
+      <p><b>Q3:</b> What if a client isn’t engaging?<br>
+      <b>A:</b> Personalized nudges, savings challenges, and small loyalty rewards for using budgeting tools and setting goals.</p>
+      <p><b>Q4:</b> How does your referral program stay ethical?<br>
+      <b>A:</b> Rewards are tied to <i>saving</i> and completing education modules—not spending or borrowing—aligning with financial‑wellness goals.</p>
+
+      <div style="margin-top:10px"><b>🏁 WHY THIS SCORES 95–100%</b></div>
+      <ul>
+        <li>✅ <b>Financial Knowledge:</b> precise terms (tiered rates, LTV, engagement metrics).</li>
+        <li>✅ <b>Customer Analysis:</b> understands 18–25 motivations (education, simplicity, incentives).</li>
+        <li>✅ <b>Solutions:</b> practical, balanced innovation vs. margin impact.</li>
+        <li>✅ <b>Communication:</b> clear structure and professional tone.</li>
+        <li>✅ <b>Ethics:</b> rewards responsible behavior; privacy/compliance considered.</li>
+      </ul>
+    </div>`;
+  }
+  // Generic example for other events
+  return `<div class="slab">
+    <b>Strong 95–100% example includes:</b>
+    <ul>
+      <li>SMART goals with numbers and timeboxes.</li>
+      <li>Audience/segment insight with 2–3 data points.</li>
+      <li>3–5 concrete actions with owners, timeline, and budget.</li>
+      <li>Success metrics & thresholds; weekly check‑ins.</li>
+      <li>Ethical safeguards & contingency plan.</li>
+    </ul>
+  </div>`;
+}
+
+const LS='deca_v44_history';
+function loadHistory(){ try{return JSON.parse(localStorage.getItem(LS)||'[]');}catch{return[]}}
+function saveHistory(h){ localStorage.setItem(LS, JSON.stringify(h)); }
+function renderHistory(){
+  const list=$('history'); list.innerHTML='';
+  const h=loadHistory(); if(!h.length){ list.innerHTML='<div class="dim">No attempts yet.</div>'; return; }
+  for(const it of h.slice().reverse()){
+    const div=document.createElement('div'); div.className='msg ai';
+    div.innerHTML = `<div class="bubble"><b>${escapeHtml(it.event)}</b> • <span class="dim">${new Date(it.time).toLocaleString()}</span><br>
+      Overall: <b>${it.overall}</b><br>
+      ${it.details.map(d=>`<span class="badge">${escapeHtml(d.name)}: ${d.score}</span>`).join(' ')}<br>
+      </div>`;
+    list.appendChild(div);
+  }
+}
+
+function renderSideScores(res){
+  const box=$('sideScores');
+  const rubricHTML = res.details.map(d=>`
+    <div class="kpiRow"><div>${escapeHtml(d.name)} (${d.weight}%)</div><div style="text-align:right"><b>${d.score}</b></div></div>
+    <div class="kpiRow" aria-hidden="true"><div class="bar"><i style="width:${d.score}%"></i></div><div></div></div>
+    <div class="dim" style="margin:6px 0 10px">${escapeHtml(d.tip)}</div>
+  `).join('');
+
+  const qaHTML = res.qaScores.length ? res.qaScores.map(q=>`
+    <div class="kpiRow"><div>Question ${q.idx}</div><div style="text-align:right"><b>${q.score}</b></div></div>
+    <div class="kpiRow" aria-hidden="true"><div class="bar"><i style="width:${q.score}%"></i></div><div></div></div>
+  `).join('') : '<div class="dim">No Q&A answers recorded.</div>';
+
+  box.innerHTML = `
+    <div class="scoreHeader">Per Question</div>
+    ${qaHTML}
+    <hr class="sep">
+    <div class="scoreHeader">Rubric Breakdown</div>
+    ${rubricHTML}
+  `;
+}
+
+$('judgeBtn').addEventListener('click', ()=>{
+  if(!state.scenario){ alert('Generate a scenario first.'); $('eventInput').focus(); return; }
+  if(!state.initialText){ alert('Please send your initial presentation first (type it below, then Send).'); $('compose').focus(); return; }
+  if(state.qaIdx < state.qaList.length){ if(!confirm('You have unanswered follow‑up questions. Continue to feedback anyway?')) return; }
+  const res = judgeText(state.eventName, state.initialText, state.qaAnswers, state.scenario.rubric);
+  const color = res.overall>=80? 'good' : res.overall>=60? 'warn' : 'bad';
+  const exampleHTML = perfectExample(state.eventName);
+
+  // Overall in chat
+  addMsg('ai', `<b>Overall Score:</b> <span style="color:var(--${color})">${res.overall}</span> / 100 • <span class="dim">${res.words} words ${res.hasSections?'• sectioned':''}</span>`);
+  const results = document.createElement('div');
+  results.className='slab'; results.style.marginTop='10px';
+  results.innerHTML = `<b>Example 100/100 model answer:</b> ${exampleHTML}`;
+  $('chat').appendChild(results); $('chat').scrollTop=$('chat').scrollHeight;
+
+  // Side details
+  renderSideScores(res);
+
+  // Save history (stores overall + rubric detail only)
+  const hist=loadHistory();
+  hist.push({time:Date.now(), event:state.eventName, grade:state.grade, overall:res.overall, details:res.details});
+  saveHistory(hist); renderHistory();
+});
+
+$('resetHistoryBtn').addEventListener('click', ()=>{ if(confirm('Reset all saved attempts?')){ saveHistory([]); renderHistory(); } });
+$('exportBtn').addEventListener('click', ()=>{
+  const h=loadHistory(); if(!h.length){ alert('No history to export yet.'); return; }
+  const rows=[["Time","Event","Grade","Overall","Rubric Item","Score","Weight"]];
+  for(const it of h){ for(const d of it.details){ rows.push([new Date(it.time).toISOString(), it.event, it.grade, it.overall, d.name, d.score, d.weight]); } }
+  const csv=rows.map(r=>r.map(v=>`"${String(v).split('"').join('""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='deca_v44_history.csv'; a.click(); URL.revokeObjectURL(url);
+});
+
+// Welcome
+addMsg('ai','Pick an event → Generate Scenario. The full scenario appears here in chat. Type your presentation below, then <b>Send</b>. Answer 1‑by‑1 with <b>Next Q</b>. Press <b>Finish & Get Scores</b> for overall (here) and breakdown (left).');
+</script>
+</body>
+</html>
